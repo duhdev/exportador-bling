@@ -69,3 +69,4 @@ details.colar { margin: 12px 0; } details.colar summary { cursor: pointer; font-
 details.veio { margin-top: 8px; font-size: 13px; } details.veio summary { cursor: pointer; color: var(--muted); }
 details.veio pre { white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow: auto; background: var(--bg); padding: 8px; border-radius: 8px; }
 .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; } .fotos img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--borda); }
+.busca-info { font-size: 13px; margin: -4px 0 8px; }

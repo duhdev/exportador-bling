@@ -1,6 +1,6 @@
 # Exportador Bling: servidor local. Uso: python servidor.py  -> abre http://localhost:8766
 # Guarda a conexão com o Bling na pasta "dados" do seu computador; nada vai para outro lugar.
-import functools, http.server, json, os, socketserver, sys, threading, time, traceback, urllib.parse, webbrowser
+import functools, http.server, json, os, socketserver, sys, threading, time, traceback, unicodedata, urllib.parse, webbrowser
 
 import atualizador, validador
 from bling import Bling, BlingDemo, ErroBling, gravar, ler
@@ -50,6 +50,28 @@ def resumo_bling(p):
     # o que o Bling mandou de imagens: aparece em "Ver o que veio do Bling" para conferir
     return {'imagens': validador.links_imagens(p),
             'midia': {k: p.get(k) for k in ('midia', 'imagemURL', '_imagemURL') if k in p}}
+
+
+catalogo = {'itens': [], 'quando': 0, 'demo': None, 'trava': threading.Lock()}
+
+
+def normalizar(s):
+    s = unicodedata.normalize('NFD', str(s or '').lower())
+    return ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+
+
+def buscar(b, pesquisa):
+    # a busca do Bling só acha o começo do nome; aqui procura cada palavra em qualquer parte
+    # do nome, SKU ou GTIN. A lista completa fica guardada por 10 minutos.
+    with catalogo['trava']:
+        demo_agora = b is demo
+        if time.time() - catalogo['quando'] > 600 or catalogo['demo'] != demo_agora:
+            catalogo['itens'] = b.catalogo()
+            catalogo['quando'], catalogo['demo'] = time.time(), demo_agora
+    palavras = normalizar(pesquisa).split()
+    achados = [p for p in catalogo['itens']
+               if all(w in normalizar(f"{p.get('nome')} {p.get('codigo')} {p.get('gtin')}") for w in palavras)]
+    return achados[:300], len(catalogo['itens'])
 
 
 def opcoes():
@@ -198,8 +220,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.responder(200, {'canais': canais})
 
         if rota == '/api/produtos':
-            lista = b.produtos(int(q.get('pagina', 1)), q.get('pesquisa', ''))
-            return self.responder(200, {'produtos': lista})
+            if q.get('pesquisa', '').strip():
+                if q.get('recarregar'):
+                    catalogo['quando'] = 0
+                lista, total = buscar(b, q['pesquisa'])
+                return self.responder(200, {'produtos': lista, 'busca': True, 'total_catalogo': total})
+            return self.responder(200, {'produtos': b.produtos(int(q.get('pagina', 1)))})
 
         if rota == '/api/verificar':
             original, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])

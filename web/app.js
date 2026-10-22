@@ -138,16 +138,24 @@ function escolherLoja(c, botao) {
 $('#regra').onchange = (e) => { estado.marketplace = e.target.value; };
 
 // ---------- passo 2: produtos ----------
-async function carregarProdutos(reset) {
+let buscaAtual = 0;
+async function carregarProdutos(reset, recarregar = false) {
   if (reset) { estado.pagina = 1; estado.produtos = []; }
   const lista = $('#produtos');
+  const termo = $('#pesquisa').value.trim();
+  const minha = ++buscaAtual;
+  if (termo) lista.innerHTML = '<div class="prod muted">Procurando em todos os produtos do Bling… a primeira busca pode levar alguns segundos.</div>';
   try {
-    const { produtos } = await api(`/api/produtos?pagina=${estado.pagina}&pesquisa=${encodeURIComponent($('#pesquisa').value)}`);
-    estado.produtos.push(...produtos);
-    $('#maisProdutos').hidden = produtos.length < 50;
-  } catch (e) { lista.textContent = 'Não consegui listar os produtos: ' + textoErro(e); return; }
+    const r = await api(`/api/produtos?pagina=${estado.pagina}&pesquisa=${encodeURIComponent(termo)}${recarregar ? '&recarregar=1' : ''}`);
+    if (minha !== buscaAtual) return; // chegou uma busca mais nova
+    estado.produtos.push(...r.produtos);
+    $('#maisProdutos').hidden = r.busca || r.produtos.length < 50;
+    $('#infoBusca').textContent = r.busca ? `${r.produtos.length} encontrado(s) em ${r.total_catalogo} produtos ativos.` : '';
+    $('#recarregarLista').hidden = !r.busca;
+  } catch (e) { if (minha === buscaAtual) lista.textContent = 'Não consegui listar os produtos: ' + textoErro(e); return; }
   desenharProdutos();
 }
+$('#recarregarLista').onclick = (e) => { e.preventDefault(); carregarProdutos(true, true); };
 
 function desenharProdutos() {
   const lista = $('#produtos');

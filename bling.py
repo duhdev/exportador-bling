@@ -123,8 +123,18 @@ class Bling:
     def canais(self):
         return self.get('/canais-venda').get('data', [])
 
-    def produtos(self, pagina=1, pesquisa=''):
-        return self.get('/produtos', pagina=pagina, limite=50, criterio=2, nome=pesquisa).get('data', [])
+    def produtos(self, pagina=1):
+        return self.get('/produtos', pagina=pagina, limite=50, criterio=2).get('data', [])
+
+    def catalogo(self):
+        """Todos os produtos ativos (resumo), 100 por página. Usado na busca."""
+        itens, pagina = [], 1
+        while True:
+            lote = self.get('/produtos', pagina=pagina, limite=100, criterio=2).get('data', [])
+            itens += lote
+            if len(lote) < 100 or pagina >= 300:
+                return itens
+            pagina += 1
 
     def produto(self, pid):
         p = self.get(f'/produtos/{pid}')['data']
@@ -185,9 +195,11 @@ class BlingDemo(Bling):
                 {'id': 9003, 'descricao': 'Magalu', 'tipo': 'Magalu', 'situacao': 1},
                 {'id': 9004, 'descricao': 'Amazon BR', 'tipo': 'Amazon', 'situacao': 1}]
 
-    def produtos(self, pagina=1, pesquisa=''):
-        lista = [p for p in self.base.values() if pesquisa.lower() in p['nome'].lower()]
-        return [{k: p.get(k) for k in ('id', 'nome', 'codigo', 'preco', 'situacao', 'formato')} for p in lista] if pagina == 1 else []
+    def produtos(self, pagina=1):
+        return self.catalogo() if pagina == 1 else []
+
+    def catalogo(self):
+        return [{k: p.get(k) for k in ('id', 'nome', 'codigo', 'preco', 'situacao', 'formato', 'gtin')} for p in self.base.values()]
 
     def produto(self, pid):
         if int(pid) not in self.base:
