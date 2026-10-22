@@ -266,7 +266,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                             'mensagem': 'O Bling recusou o envio.'})
             return self.responder(200, {'id': d['id'], 'nome': base.get('nome'), 'resultado': 'enviado', 'acao': acao, 'preco': preco,
                                         'correcoes': correcoes if salvo else [], 'problemas': problemas,
-                                        'mensagem': ('Anúncio vinculado à loja' if acao == 'criado' else 'Anúncio atualizado na loja')
+                                        'mensagem': ('Corrigido e vinculado à loja no Bling' if acao == 'criado' else 'Corrigido e atualizado na loja do Bling')
                                         + f' por R$ {preco:.2f}.'})
 
         self.responder(404, {'erro': 'rota não encontrada'})

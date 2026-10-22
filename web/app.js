@@ -229,7 +229,7 @@ $('#btnVerificar').onclick = () => processar(false);
 $('#btnExportar').onclick = () => processar(true);
 
 function selo(r) {
-  if (r.resultado === 'enviado') return ['s-ok', 'ENVIADO'];
+  if (r.resultado === 'enviado') return ['s-ok', 'PRONTO NO BLING'];
   if (r.resultado === 'bloqueado' || r.resultado === 'recusado' || r.resultado === 'falha') return ['s-erro', r.resultado.toUpperCase()];
   if (r.status === 'erro') return ['s-erro', 'PRECISA CORRIGIR'];
   if (r.status === 'aviso') return ['s-aviso', 'PRONTO, COM AVISOS'];
@@ -242,7 +242,8 @@ function resumir() {
   const box = $('#resumo');
   box.innerHTML = '';
   const add = (cls, txt, qtd) => qtd && box.append(el('span', { class: cls }, `${qtd} ${txt}`));
-  add('s-ok', 'enviado(s)', n((r) => r.resultado === 'enviado'));
+  add('s-ok', 'pronto(s) no Bling', n((r) => r.resultado === 'enviado'));
+  $('#proximoPasso').hidden = !n((r) => r.resultado === 'enviado');
   add('s-ok', 'pronto(s)', n((r) => !r.resultado && r.status !== 'erro'));
   add('s-erro', 'precisa(m) de você', n((r) => ['bloqueado', 'recusado', 'falha'].includes(r.resultado) || (!r.resultado && r.status === 'erro')));
   add('s-fix', 'correção(ões) automática(s)', rs.reduce((t, r) => t + (r.correcoes || []).length, 0));
