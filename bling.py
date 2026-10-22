@@ -45,14 +45,15 @@ class Bling:
         return bool((ler('token.json') or {}).get('access_token'))
 
     def url_login(self):
-        self.estado_oauth = secrets.token_urlsafe(16)
-        q = urllib.parse.urlencode({'response_type': 'code', 'client_id': self.config()['client_id'],
-                                    'state': self.estado_oauth})
+        estado = secrets.token_urlsafe(16)
+        gravar('oauth_state.json', ([estado] + (ler('oauth_state.json') or []))[:5])
+        q = urllib.parse.urlencode({'response_type': 'code', 'client_id': self.config()['client_id'].strip(),
+                                    'state': estado})
         return f'{AUTORIZAR}?{q}'
 
     def _pedir_token(self, dados):
         c = self.config()
-        basic = base64.b64encode(f'{c["client_id"]}:{c["client_secret"]}'.encode()).decode()
+        basic = base64.b64encode(f'{c["client_id"].strip()}:{c["client_secret"].strip()}'.encode()).decode()
         req = urllib.request.Request(TOKEN, data=urllib.parse.urlencode(dados).encode(), method='POST', headers={
             'Authorization': f'Basic {basic}', 'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json'})
@@ -61,14 +62,17 @@ class Bling:
                 tok = json.load(r)
         except urllib.error.HTTPError as e:
             raise ErroBling(e.code, _json(e.read()))
+        except urllib.error.URLError as e:
+            raise ErroBling(0, {'error': {'message': f'Sem conexão com o Bling ({e.reason}). Confira a internet, o antivírus ou o firewall.'}})
         tok['expira_em'] = time.time() + int(tok.get('expires_in', 21600)) - 120
         gravar('token.json', tok)
         return tok
 
     def trocar_codigo(self, code, state):
-        if not self.estado_oauth or state != self.estado_oauth:
+        validos = ler('oauth_state.json') or []
+        if state not in validos:
             raise ErroBling(400, {'error': {'message': 'Retorno do Bling não confere (state). Tente conectar de novo.'}})
-        self.estado_oauth = None
+        gravar('oauth_state.json', [s for s in validos if s != state])
         return self._pedir_token({'grant_type': 'authorization_code', 'code': code})
 
     def _token(self):

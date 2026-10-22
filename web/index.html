@@ -20,11 +20,13 @@
   <section id="telaConfig" class="card" hidden>
     <h2>Conectar ao Bling</h2>
     <ol class="passos">
-      <li>No Bling, abra <b>Preferências › Sistema › Central de extensões › Área do integrador</b> e clique em <b>Criar aplicativo</b> (tipo <i>Aplicativo privado</i>).</li>
+      <li>No Bling, abra a <b>Central de Extensões</b> (no topo, perto do seu nome) › aba <b>Área do Integrador</b> e clique em <b>Criar aplicativo</b> (tipo <i>Aplicativo privado</i>). Atalho: <a href="https://www.bling.com.br/cadastro.aplicativos.php" target="_blank" rel="noopener">abrir a Área do Integrador</a>.</li>
       <li>Em <b>Link de redirecionamento</b>, cole: <code id="callback"></code> <button class="mini" id="copiarCallback">Copiar</button></li>
       <li>Em <b>Escopos</b>, marque: <i>Produtos</i>, <i>Produtos - Lojas</i>, <i>Canais de venda</i> e <i>Estoques</i>. Salve.</li>
       <li>Copie o <b>Client ID</b> e o <b>Client Secret</b> do aplicativo e cole abaixo.</li>
+      <li><b>Entre no Bling neste mesmo navegador</b> (<a href="https://www.bling.com.br/login" target="_blank" rel="noopener">abrir o Bling</a>) e depois clique em <b>Salvar e conectar ao Bling</b>. Na página do Bling, clique em <b>Autorizar</b>.</li>
     </ol>
+    <div id="diagnostico" class="item erro" hidden></div>
     <label>Client ID <input id="clientId" autocomplete="off"></label>
     <label>Client Secret <input id="clientSecret" type="password" autocomplete="off" placeholder="(mantém o salvo se ficar vazio)"></label>
     <label>Marca padrão <small>usada quando o produto está sem marca (ex.: Genérica, ou o nome da sua loja)</small>

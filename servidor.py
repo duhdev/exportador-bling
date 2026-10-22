@@ -40,6 +40,12 @@ def mk_do_canal(tipo, regras):
     return 'generico'
 
 
+def registrar_conexao(etapa, detalhe=''):
+    # mostra na janela preta e guarda para a tela explicar onde a conexão parou
+    print(f'[conexão] {etapa} {detalhe}'.strip())
+    gravar('conexao.json', {'etapa': etapa, 'detalhe': detalhe, 'quando': time.time()})
+
+
 def opcoes():
     c = ler('config.json') or {}
     return {'marca_padrao': c.get('marca_padrao', '')}
@@ -112,7 +118,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 'configurado': bool(c.get('client_id') and c.get('client_secret')), 'demo': bool(c.get('demo')),
                 'conectado': b.conectado(), 'callback': CALLBACK, 'marca_padrao': c.get('marca_padrao', ''),
                 'client_id': c.get('client_id', ''), 'versao': atualizador.versao_local()[:7],
-                'atualizacao': bool(nova_versao['sha']),
+                'atualizacao': bool(nova_versao['sha']), 'conexao': ler('conexao.json') or {},
                 'marketplaces': {k: {'nome': r['nome'], 'titulo_max': r['titulo_max']} for k, r in regras.items()}})
 
         if rota == '/api/config':
@@ -122,20 +128,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         if rota == '/auth/login':
             if not (c.get('client_id') and c.get('client_secret')):
+                registrar_conexao('faltam_credenciais')
                 return self.redirecionar('/?erro=configure')  # a tela explica o que falta
-            return self.redirecionar(real.url_login())
+            url = real.url_login()
+            registrar_conexao('foi_ao_bling', url.split('&state=')[0])
+            return self.redirecionar(url)
 
         if rota == '/auth/callback':
+            registrar_conexao('bling_voltou', 'com código' if 'code' in q else json.dumps(q, ensure_ascii=False))
             if 'code' not in q:
                 motivo = q.get('error_description') or q.get('error') or 'a autorização foi cancelada ou recusada'
                 return self.redirecionar('/?erro=' + urllib.parse.quote('O Bling não autorizou: ' + motivo))
             try:
                 real.trocar_codigo(q['code'], q.get('state'))
-            except ErroBling as e:
+            except Exception as e:
+                if not isinstance(e, ErroBling):
+                    traceback.print_exc()
+                    e = ErroBling(0, {'error': {'message': f'Erro inesperado ({e}).'}})
                 msg = ' '.join(x['mensagem'] for x in validador.traduzir_erro_bling(e.corpo))
                 if e.status in (400, 401):
                     msg += ' Confira se o Client ID e o Client Secret foram copiados inteiros, sem espaço no fim.'
+                registrar_conexao('erro_token', msg)
                 return self.redirecionar('/?erro=' + urllib.parse.quote('Não consegui conectar: ' + msg))
+            registrar_conexao('conectado')
             gravar('config.json', {**c, 'demo': False})
             return self.redirecionar('/?conectado=1')
 
@@ -150,6 +165,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         if rota == '/api/desconectar':
             real.desconectar()
+            registrar_conexao('desconectado')
             return self.responder(200, {'ok': True})
 
         if rota == '/api/canais':

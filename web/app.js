@@ -47,11 +47,33 @@ async function iniciar() {
   const pronto = info.conectado && !erro;
   $('#telaConfig').hidden = pronto;
   if (erro) alertar(erro === 'configure' ? 'Falta o Client Secret. Cole o Client ID e o Client Secret do aplicativo do Bling e clique em "Salvar e conectar ao Bling" de novo.' : erro);
+  mostrarDiagnostico(info);
   if (params.get('conectado')) avisar('Conectado ao Bling! Agora escolha a loja no passo 1.');
   history.replaceState(null, '', '/');
 
   for (const s of ['#telaLojas', '#telaProdutos', '#telaEnviar']) $(s).hidden = !pronto;
   if (pronto) { await carregarLojas(); await carregarProdutos(true); }
+}
+
+// Quando a pessoa foi mandada ao Bling e ele não voltou para cá, explica o porquê.
+function mostrarDiagnostico(info) {
+  const box = $('#diagnostico');
+  const c = info.conexao || {};
+  const recente = c.quando && Date.now() / 1000 - c.quando < 3600;
+  box.hidden = info.conectado || !recente || c.etapa !== 'foi_ao_bling';
+  if (box.hidden) return;
+  box.innerHTML = '';
+  box.append(
+    el('b', {}, 'Você foi mandado para o Bling, mas o Bling não voltou para cá. Confira estes 3 pontos:'),
+    el('ol', {},
+      el('li', {}, el('b', {}, 'Login: '), 'se o Bling pediu para entrar na conta, depois ele abre a página inicial dele e esquece a autorização. ',
+        'Entre no Bling neste navegador primeiro, volte aqui e clique em "Salvar e conectar ao Bling" de novo.'),
+      el('li', {}, el('b', {}, 'Link de redirecionamento: '), 'no aplicativo do Bling ele precisa ser exatamente ',
+        el('code', {}, info.callback), ' (com http, sem "s", e sem espaço).'),
+      el('li', {}, el('b', {}, 'Aplicativo salvo: '), 'confira se o aplicativo foi salvo no Bling e se o Client ID colado aqui é o dele.')),
+    el('div', { class: 'acoes' },
+      el('a', { href: 'https://www.bling.com.br/login', target: '_blank', rel: 'noopener' }, el('button', { class: 'sec' }, '1. Entrar no Bling')),
+      el('button', { onclick: () => { location.href = '/auth/login'; } }, '2. Tentar conectar de novo')));
 }
 
 // Aviso que fica na tela até a pessoa fechar (some sozinho só quando é boa notícia).
