@@ -105,13 +105,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         if rota == '/auth/login':
             if not (c.get('client_id') and c.get('client_secret')):
-                return self.redirecionar('/?erro=configure')
+                return self.redirecionar('/?erro=configure')  # a tela explica o que falta
             return self.redirecionar(real.url_login())
 
         if rota == '/auth/callback':
             if 'code' not in q:
-                return self.redirecionar('/?erro=' + urllib.parse.quote(q.get('error_description', 'recusado')))
-            real.trocar_codigo(q['code'], q.get('state'))
+                motivo = q.get('error_description') or q.get('error') or 'a autorização foi cancelada ou recusada'
+                return self.redirecionar('/?erro=' + urllib.parse.quote('O Bling não autorizou: ' + motivo))
+            try:
+                real.trocar_codigo(q['code'], q.get('state'))
+            except ErroBling as e:
+                msg = ' '.join(x['mensagem'] for x in validador.traduzir_erro_bling(e.corpo))
+                if e.status in (400, 401):
+                    msg += ' Confira se o Client ID e o Client Secret foram copiados inteiros, sem espaço no fim.'
+                return self.redirecionar('/?erro=' + urllib.parse.quote('Não consegui conectar: ' + msg))
             gravar('config.json', {**c, 'demo': False})
             return self.redirecionar('/?conectado=1')
 

@@ -41,19 +41,28 @@ async function iniciar() {
   for (const [k, m] of Object.entries(info.marketplaces)) sel.append(el('option', { value: k }, m.nome));
 
   const params = new URLSearchParams(location.search);
-  if (params.get('erro')) alertar(params.get('erro') === 'configure' ? 'Preencha o Client ID e o Client Secret primeiro.' : 'O Bling não autorizou: ' + params.get('erro'));
+  const erro = params.get('erro');
+  const pronto = info.conectado && !erro;
+  $('#telaConfig').hidden = pronto;
+  if (erro) alertar(erro === 'configure' ? 'Falta o Client Secret. Cole o Client ID e o Client Secret do aplicativo do Bling e clique em "Salvar e conectar ao Bling" de novo.' : erro);
+  if (params.get('conectado')) avisar('Conectado ao Bling! Agora escolha a loja no passo 1.');
   history.replaceState(null, '', '/');
 
-  const pronto = info.conectado;
-  $('#telaConfig').hidden = pronto;
   for (const s of ['#telaLojas', '#telaProdutos', '#telaEnviar']) $(s).hidden = !pronto;
   if (pronto) { await carregarLojas(); await carregarProdutos(true); }
 }
 
-function alertar(msg) {
-  const box = el('div', { class: 'card item erro' }, msg);
+// Aviso que fica na tela até a pessoa fechar (some sozinho só quando é boa notícia).
+function alertar(msg, tipo = 'erro') {
+  const box = el('div', { class: `card item ${tipo} aviso-topo` }, el('span', {}, msg),
+    el('button', { class: 'mini sec', onclick: () => box.remove() }, 'Fechar'));
   $('main').prepend(box);
-  setTimeout(() => box.remove(), 9000);
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return box;
+}
+function avisar(msg) {
+  const box = alertar(msg, 'fix');
+  setTimeout(() => box.remove(), 8000);
 }
 
 $('#btnConfig').onclick = () => { $('#telaConfig').hidden = !$('#telaConfig').hidden; };
@@ -61,7 +70,8 @@ $('#copiarCallback').onclick = () => navigator.clipboard.writeText($('#callback'
 $('#btnConectar').onclick = async () => {
   const dados = { client_id: $('#clientId').value.trim(), marca_padrao: $('#marcaPadrao').value.trim(), demo: false };
   if ($('#clientSecret').value.trim()) dados.client_secret = $('#clientSecret').value.trim();
-  if (!dados.client_id) return alertar('Cole o Client ID do aplicativo do Bling.');
+  if (!dados.client_id) return alertar('Cole o Client ID do aplicativo do Bling (passo 4 acima).');
+  if (!dados.client_secret && !estado.info.configurado) return alertar('Cole também o Client Secret do aplicativo do Bling (passo 4 acima).');
   await api('/api/config', dados);
   location.href = '/auth/login';
 };
