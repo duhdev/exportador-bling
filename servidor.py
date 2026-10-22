@@ -1,8 +1,8 @@
 # Exportador Bling: servidor local. Uso: python servidor.py  -> abre http://localhost:8766
 # Guarda a conexão com o Bling na pasta "dados" do seu computador; nada vai para outro lugar.
-import functools, http.server, json, os, socketserver, sys, traceback, urllib.parse, webbrowser
+import functools, http.server, json, os, socketserver, sys, threading, time, traceback, urllib.parse, webbrowser
 
-import validador
+import atualizador, validador
 from bling import Bling, BlingDemo, ErroBling, gravar, ler
 
 PORT = 8766
@@ -10,6 +10,22 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 CALLBACK = f'http://localhost:{PORT}/auth/callback'
 
 real, demo = Bling(), BlingDemo()
+nova_versao = {'sha': None}
+
+
+def procurar_atualizacoes():
+    # confere o GitHub a cada 3 minutos; a tela mostra o aviso "Nova versão"
+    while True:
+        time.sleep(180)
+        nova_versao['sha'] = atualizador.tem_atualizacao()
+
+
+def reiniciar(codigo):
+    # o iniciar.bat abre o servidor de novo quando ele sai com 3 ou 4; fora dele, reinicia por aqui
+    if os.environ.get('EXPORTADOR_REINICIA'):
+        os._exit(codigo)
+    args = [a for a in sys.argv if a != '--sem-navegador'] + (['--sem-navegador'] if codigo == 3 else [])
+    os.execv(sys.executable, [sys.executable] + args)
 
 
 def cliente():
@@ -95,7 +111,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.responder(200, {
                 'configurado': bool(c.get('client_id') and c.get('client_secret')), 'demo': bool(c.get('demo')),
                 'conectado': b.conectado(), 'callback': CALLBACK, 'marca_padrao': c.get('marca_padrao', ''),
-                'client_id': c.get('client_id', ''),
+                'client_id': c.get('client_id', ''), 'versao': atualizador.versao_local()[:7],
+                'atualizacao': bool(nova_versao['sha']),
                 'marketplaces': {k: {'nome': r['nome'], 'titulo_max': r['titulo_max']} for k, r in regras.items()}})
 
         if rota == '/api/config':
@@ -121,6 +138,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self.redirecionar('/?erro=' + urllib.parse.quote('Não consegui conectar: ' + msg))
             gravar('config.json', {**c, 'demo': False})
             return self.redirecionar('/?conectado=1')
+
+        if rota == '/api/atualizar':
+            sha = nova_versao['sha'] or atualizador.tem_atualizacao()
+            if not sha:
+                return self.responder(200, {'ok': True, 'atualizado': False})
+            atualizador.atualizar(sha)
+            self.responder(200, {'ok': True, 'atualizado': True})
+            threading.Timer(0.5, reiniciar, [3]).start()
+            return
 
         if rota == '/api/desconectar':
             real.desconectar()
@@ -179,6 +205,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    if '--sem-atualizar' not in sys.argv:
+        print('Procurando atualizações...')
+        sha = atualizador.tem_atualizacao()
+        if sha:
+            print('Baixando a versão nova...')
+            try:
+                atualizador.atualizar(sha)
+                reiniciar(4)
+            except Exception as e:
+                print(f'Não consegui atualizar ({e}). Abrindo a versão atual.')
+        threading.Thread(target=procurar_atualizacoes, daemon=True).start()
     os.chdir(os.path.join(ROOT, 'web'))
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer(('127.0.0.1', PORT), Handler) as srv:

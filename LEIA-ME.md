@@ -10,6 +10,9 @@ App web que pega os produtos do Bling, confere cada um pelas regras do marketpla
 
 Mac/Linux: rode `python3 servidor.py` dentro da pasta.
 
+## Atualização automática
+Você só baixa uma vez. Toda vez que abre, o exportador confere no GitHub se tem versão nova e se atualiza sozinho. Com ele aberto, a cada 3 minutos ele confere de novo. Quando tem novidade, aparece o botão **Nova versão: atualizar agora** no topo da tela, e um clique atualiza e recarrega a página. A sua conexão com o Bling (pasta `dados`) é mantida.
+
 ## Como funciona
 1. **Para onde exportar?** Lista as lojas (canais de venda) do seu Bling e escolhe as regras pelo tipo da loja.
 2. **Quais produtos?** Busque e marque os produtos.

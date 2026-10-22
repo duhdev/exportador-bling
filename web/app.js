@@ -32,6 +32,8 @@ async function iniciar() {
   $('#clientId').value = info.client_id;
   $('#marcaPadrao').value = info.marca_padrao;
   $('#btnDesconectar').hidden = !info.conectado || info.demo;
+  $('#versao').textContent = info.versao ? `versão ${info.versao}` : '';
+  $('#btnAtualizar').hidden = !info.atualizacao;
   const pill = $('#conexao');
   pill.textContent = info.demo ? 'Modo demonstração' : info.conectado ? 'Conectado ao Bling' : 'Não conectado';
   pill.className = 'pill ' + (info.conectado ? 'ok' : 'er');
@@ -290,5 +292,31 @@ function editor(p, r, exportar) {
   box.append(btn);
   return box;
 }
+
+// ---------- atualização automática ----------
+// o servidor confere o GitHub; quando tem versão nova, aparece o botão no topo
+setInterval(async () => {
+  try { $('#btnAtualizar').hidden = !(await api('/api/estado')).atualizacao; } catch (e) { /* servidor reiniciando */ }
+}, 60000);
+
+$('#btnAtualizar').onclick = async () => {
+  const b = $('#btnAtualizar');
+  b.disabled = true;
+  b.textContent = 'Atualizando…';
+  try {
+    const r = await api('/api/atualizar', {});
+    if (!r.atualizado) { b.hidden = true; return avisar('Você já está na versão mais nova.'); }
+  } catch (e) {
+    b.disabled = false;
+    b.textContent = 'Nova versão: atualizar agora';
+    return alertar('Não consegui atualizar: ' + textoErro(e));
+  }
+  // espera o servidor voltar com a versão nova e recarrega a página
+  await new Promise((r) => setTimeout(r, 1500));
+  for (let i = 0; i < 40; i++) {
+    try { await api('/api/estado'); return location.reload(); } catch (e) { await new Promise((r) => setTimeout(r, 500)); }
+  }
+  alertar('O exportador não voltou sozinho. Feche a janela preta e abra o iniciar.bat de novo.');
+};
 
 iniciar().catch((e) => alertar('Erro ao abrir: ' + textoErro(e)));
