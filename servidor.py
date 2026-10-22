@@ -24,7 +24,7 @@ def reiniciar(codigo):
     # o iniciar.bat abre o servidor de novo quando ele sai com 3 ou 4; fora dele, reinicia por aqui
     if os.environ.get('EXPORTADOR_REINICIA'):
         os._exit(codigo)
-    args = [a for a in sys.argv if a != '--sem-navegador'] + (['--sem-navegador'] if codigo == 3 else [])
+    args = [os.path.join(ROOT, 'servidor.py')] + [a for a in sys.argv[1:] if a != '--sem-navegador'] + (['--sem-navegador'] if codigo == 3 else [])
     os.execv(sys.executable, [sys.executable] + args)
 
 
@@ -216,9 +216,9 @@ if __name__ == '__main__':
             except Exception as e:
                 print(f'Não consegui atualizar ({e}). Abrindo a versão atual.')
         threading.Thread(target=procurar_atualizacoes, daemon=True).start()
-    os.chdir(os.path.join(ROOT, 'web'))
     socketserver.ThreadingTCPServer.allow_reuse_address = True
-    with socketserver.ThreadingTCPServer(('127.0.0.1', PORT), Handler) as srv:
+    pagina = functools.partial(Handler, directory=os.path.join(ROOT, 'web'))
+    with socketserver.ThreadingTCPServer(('127.0.0.1', PORT), pagina) as srv:
         url = f'http://localhost:{PORT}'
         print(f'Exportador Bling rodando em {url}  (feche esta janela para parar)')
         if '--sem-navegador' not in sys.argv:
