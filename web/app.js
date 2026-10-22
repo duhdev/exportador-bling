@@ -254,7 +254,7 @@ function desenharResultado(r, exportar) {
   for (const c of r.correcoes || []) {
     corpo.append(el('div', { class: 'item fix' },
       el('b', {}, '✔ Corrigido sozinho: '), c.motivo,
-      el('div', {}, el('span', { class: 'antes' }, String(c.antes ?? '(vazio)').slice(0, 300)), ' → ', el('span', {}, String(c.depois).slice(0, 300)))));
+      el('div', {}, el('span', { class: 'antes' }, legivel(c.antes)), ' → ', el('span', {}, legivel(c.depois)))));
   }
   for (const d of r.detalhes || []) {
     corpo.append(el('div', { class: 'item erro' }, el('b', {}, 'O marketplace recusou: '), d.mensagem,
@@ -262,10 +262,29 @@ function desenharResultado(r, exportar) {
       d.original !== d.mensagem ? el('div', { class: 'onde' }, 'Mensagem original: ' + d.original) : null));
   }
   for (const p of r.problemas || []) corpo.append(desenharProblema(p, r, exportar));
+  if (r.bling) corpo.append(veioDoBling(r.bling));
   if (!corpo.childElementCount && !r.resultado) corpo.append(el('div', { class: 'muted' }, `Tudo certo para o ${estado.info.marketplaces[estado.marketplace].nome}.`));
 
   const antigo = document.querySelector(`.resultado[data-id="${r.id}"]`);
   antigo ? antigo.replaceWith(art) : $('#resultados').append(art);
+}
+
+// mostra só o texto (sem as tags HTML) e corta textos longos, para dar para comparar o antes e depois
+function legivel(v) {
+  if (v == null || v === '') return '(vazio)';
+  const div = document.createElement('div');
+  div.innerHTML = String(v).replace(/<br\s*\/?>|<\/p>/gi, '\n');
+  const t = (div.textContent || '').trim();
+  return t.length > 400 ? t.slice(0, 400) + '…' : t;
+}
+
+// "Ver o que veio do Bling": as imagens que o exportador encontrou no produto
+function veioDoBling(b) {
+  const det = el('details', { class: 'veio' }, el('summary', {}, `Ver o que veio do Bling (${b.imagens.length} imagem(ns) encontrada(s))`));
+  const fotos = el('div', { class: 'fotos' });
+  for (const link of b.imagens) fotos.append(el('a', { href: link, target: '_blank', rel: 'noopener' }, el('img', { src: link, alt: '', loading: 'lazy' })));
+  det.append(fotos, el('pre', {}, JSON.stringify(b.midia, null, 2)));
+  return det;
 }
 
 function desenharProblema(p, r, exportar) {

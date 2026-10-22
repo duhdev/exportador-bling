@@ -46,6 +46,12 @@ def registrar_conexao(etapa, detalhe=''):
     gravar('conexao.json', {'etapa': etapa, 'detalhe': detalhe, 'quando': time.time()})
 
 
+def resumo_bling(p):
+    # o que o Bling mandou de imagens: aparece em "Ver o que veio do Bling" para conferir
+    return {'imagens': validador.links_imagens(p),
+            'midia': {k: p.get(k) for k in ('midia', 'imagemURL', '_imagemURL') if k in p}}
+
+
 def opcoes():
     c = ler('config.json') or {}
     return {'marca_padrao': c.get('marca_padrao', '')}
@@ -196,24 +202,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.responder(200, {'produtos': lista})
 
         if rota == '/api/verificar':
-            _, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
+            original, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
             return self.responder(200, {'id': d['id'], 'nome': corrigido.get('nome'), 'correcoes': correcoes,
-                                        'problemas': problemas, 'status': validador.status(problemas)})
+                                        'problemas': problemas, 'status': validador.status(problemas),
+                                        'bling': resumo_bling(original)})
 
         if rota == '/api/corrigir-campo':
             # o usuário digitou o valor na tela: salva no Bling e verifica de novo
             p = b.produto(d['id'])
             p = validador.aplicar_campo(p, d['campo'], d['valor'])
             b.salvar_produto(p)
-            _, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
+            original, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
             return self.responder(200, {'id': d['id'], 'nome': corrigido.get('nome'), 'correcoes': correcoes,
-                                        'problemas': problemas, 'status': validador.status(problemas)})
+                                        'problemas': problemas, 'status': validador.status(problemas),
+                                        'bling': resumo_bling(original)})
 
         if rota == '/api/exportar':
             original, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
             erros = [x for x in problemas if x['nivel'] == 'erro']
             if erros:
                 return self.responder(200, {'id': d['id'], 'nome': corrigido.get('nome'), 'resultado': 'bloqueado', 'problemas': problemas,
+                                            'bling': resumo_bling(original),
                                             'correcoes': correcoes,
                                             'mensagem': 'Não enviei: corrija os itens em vermelho primeiro.'})
             salvo = False

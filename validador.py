@@ -33,7 +33,8 @@ def espacos(s):
 
 def tirar_html(s):
     s = re.sub(r'<\s*br\s*/?>|</p>|</li>', '\n', s, flags=re.I)
-    return html.unescape(RE_HTML.sub('', s))
+    s = re.sub(r'<[^>]*$', '', RE_HTML.sub('', s))  # inclusive tag cortada no fim
+    return html.unescape(s).replace('\xa0', ' ')
 
 
 def gtin_valido(g):
@@ -67,9 +68,49 @@ def cortar(s, limite):
     return corte.rstrip(' -,/') if len(corte) >= limite * 0.6 else s[:limite].rstrip()
 
 
+def links_imagens(p):
+    """Todos os links de imagem do produto, onde quer que o Bling coloque (externas, internas,
+    imagemURL...). Ignora vídeo e miniaturas."""
+    achados = []
+
+    def andar(v, chave=''):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if k.lower() in ('video', 'videos', 'linkminiatura', 'miniatura'):
+                    continue
+                andar(x, k)
+        elif isinstance(v, list):
+            for x in v:
+                andar(x, chave)
+        elif isinstance(v, str) and v.startswith(('http://', 'https://')) and chave.lower() in ('link', 'url', 'imagemurl', 'imagem', ''):
+            if v not in achados:
+                achados.append(v)
+
+    andar(p.get('midia') or {})
+    for k in ('imagemURL', 'imagemUrl', 'imagem', 'imagens', '_imagemURL'):
+        andar(p.get(k))
+    return achados
+
+
 def contar_imagens(p):
-    m = (p.get('midia') or {}).get('imagens') or {}
-    return len(m.get('externas') or []) + len(m.get('internas') or [])
+    return len(links_imagens(p))
+
+
+PERMITIDAS = {'p', 'br', 'ul', 'ol', 'li', 'b', 'strong', 'i', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'table', 'tr', 'td', 'th', 'tbody', 'thead'}
+
+
+def limpar_html(s):
+    # tira estilos copiados de outros sites (fonte, cor, tamanho) e tags que os marketplaces recusam
+    def tag(m):
+        fecha, nome = m.group(1), m.group(2).lower()
+        if nome not in PERMITIDAS:
+            return '\n' if nome in ('div',) and fecha else ''
+        return f'<{fecha}{nome}{" /" if nome == "br" else ""}>'
+    s = re.sub(r'<\s*(/?)\s*([a-zA-Z0-9]+)[^>]*>', tag, s)
+    s = re.sub(r'<[^>]*$', '', s)  # tag cortada no fim
+    s = re.sub(r'&nbsp;', ' ', s)
+    s = s + '</p>' * max(0, s.count('<p>') - s.count('</p>'))
+    return s
 
 
 def dimensoes(p):
@@ -139,6 +180,11 @@ def verificar(produto, mk, regras, opcoes=None):
     if not r['descricao_html'] and RE_HTML.search(nova):
         motivo.append(f'tirei o HTML (o {r["nome"]} só aceita texto)')
         nova = tirar_html(nova)
+    elif RE_HTML.search(nova) or '&nbsp;' in nova:
+        limpa = limpar_html(nova)
+        if espacos(limpa) != espacos(nova):
+            motivo.append('tirei fontes, cores e estilos copiados de outros sites (o marketplace recusa ou mostra quebrado)')
+            nova = limpa
     if r['remover_contato_descricao']:
         antes_contato = nova
         nova = RE_EMAIL.sub('', nova)
@@ -172,12 +218,18 @@ def verificar(produto, mk, regras, opcoes=None):
             base.append(f'Medidas da embalagem: {l:g} x {a:g} x {pr:g} cm.')
         if p.get('pesoBruto'):
             base.append(f'Peso: {float(p["pesoBruto"]):g} kg.')
-        gerada = '\n'.join(b for b in base if b)
+        com_html = bool(RE_HTML.search(nova))
+        gerada = ('<br />\n' if com_html else '\n').join(b for b in base if b)
+        if com_html:
+            gerada += '</p>' * max(0, gerada.count('<p>') - gerada.count('</p>'))
         if len(gerada) >= r['descricao_min']:
             nova = gerada
             motivo.append('completei a descrição com os dados do produto (confira)')
     if len(nova) > r['descricao_max']:
         nova = cortar(nova, r['descricao_max'])
+        motivo.append(f'cortei no limite de {r["descricao_max"]} caracteres')
+    if not motivo:
+        nova = desc  # só espaços diferentes: não vale regravar o produto
     if nova != desc:
         corrigir('descricaoCurta', desc, nova, (lambda t: t[:1].upper() + t[1:] + '.')('; '.join(motivo) or 'arrumei espaços e quebras de linha'))
         p['descricaoCurta'] = nova
@@ -247,7 +299,11 @@ def verificar(produto, mk, regras, opcoes=None):
 
     # --- Imagens ---
     n = contar_imagens(p)
-    if n < r['imagens_min']:
+    sem_midia = 'midia' not in p and not any(k in p for k in ('imagemURL', 'imagens', '_imagemURL'))
+    if n < r['imagens_min'] and sem_midia:
+        problemas.append(problema('imagens', 'aviso', 'Não consegui ler as imagens deste produto no Bling. Confira se ele tem foto antes de exportar.',
+                                  'Se o produto tem imagem no Bling, pode exportar.'))
+    elif n < r['imagens_min']:
         problemas.append(problema('imagens', 'erro', f'Produto sem imagem (o {r["nome"]} exige pelo menos {r["imagens_min"]}).',
                                   'Cole o link de uma imagem (JPG ou PNG, de preferência 1200x1200 com fundo branco) ou adicione no Bling.',
                                   {'tipo': 'imagem'}))

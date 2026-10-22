@@ -128,6 +128,15 @@ class Bling:
 
     def produto(self, pid):
         p = self.get(f'/produtos/{pid}')['data']
+        from validador import contar_imagens
+        if not contar_imagens(p):
+            # algumas contas trazem a foto só na listagem (campo imagemURL)
+            try:
+                lista = self.get('/produtos', **{'idsProdutos[]': pid}).get('data', [])
+                if lista and lista[0].get('imagemURL'):
+                    p['_imagemURL'] = lista[0]['imagemURL']
+            except ErroBling:
+                pass
         try:
             s = self.get('/estoques/saldos', **{'idsProdutos[]': pid}).get('data', [])
             p['_saldo'] = float(s[0].get('saldoVirtualTotal', 0)) if s else None
