@@ -27,6 +27,12 @@
       <li><b>Entre no Bling neste mesmo navegador</b> (<a href="https://www.bling.com.br/login" target="_blank" rel="noopener">abrir o Bling</a>) e depois clique em <b>Salvar e conectar ao Bling</b>. Na página do Bling, clique em <b>Autorizar</b>.</li>
     </ol>
     <div id="diagnostico" class="item erro" hidden></div>
+    <details class="colar">
+      <summary>O Bling me mandou para outro site (Google, por exemplo)</summary>
+      <p>Copie o endereço inteiro daquela página (tem <code>code=</code> no meio), cole aqui e clique em Conectar. Faça logo: o código vale poucos minutos.
+        Para não precisar disso de novo, troque o <b>Link de redirecionamento</b> do aplicativo no Bling pelo endereço do passo 2.</p>
+      <div class="editor"><input id="urlColada" placeholder="https://www.google.com/?code=...&amp;state=..."><button id="btnColar">Conectar</button></div>
+    </details>
     <label>Client ID <input id="clientId" autocomplete="off"></label>
     <label>Client Secret <input id="clientSecret" type="password" autocomplete="off" placeholder="(mantém o salvo se ficar vazio)"></label>
     <label>Marca padrão <small>usada quando o produto está sem marca (ex.: Genérica, ou o nome da sua loja)</small>

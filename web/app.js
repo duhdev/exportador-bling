@@ -69,7 +69,7 @@ function mostrarDiagnostico(info) {
       el('li', {}, el('b', {}, 'Login: '), 'se o Bling pediu para entrar na conta, depois ele abre a página inicial dele e esquece a autorização. ',
         'Entre no Bling neste navegador primeiro, volte aqui e clique em "Salvar e conectar ao Bling" de novo.'),
       el('li', {}, el('b', {}, 'Link de redirecionamento: '), 'no aplicativo do Bling ele precisa ser exatamente ',
-        el('code', {}, info.callback), ' (com http, sem "s", e sem espaço).'),
+        el('code', {}, info.callback), ' (com http, sem "s", e sem espaço). Se o Bling te mandou para o Google ou outro site, é isso: use também a opção logo abaixo.'),
       el('li', {}, el('b', {}, 'Aplicativo salvo: '), 'confira se o aplicativo foi salvo no Bling e se o Client ID colado aqui é o dele.')),
     el('div', { class: 'acoes' },
       el('a', { href: 'https://www.bling.com.br/login', target: '_blank', rel: 'noopener' }, el('button', { class: 'sec' }, '1. Entrar no Bling')),
@@ -102,6 +102,14 @@ $('#btnConectar').onclick = async () => {
 $('#btnDemo').onclick = async () => {
   await api('/api/config', { demo: true, marca_padrao: $('#marcaPadrao').value.trim() });
   location.reload();
+};
+$('#btnColar').onclick = async () => {
+  const url = $('#urlColada').value.trim();
+  if (!url) return alertar('Cole o endereço da página para onde o Bling te mandou.');
+  try {
+    await api('/api/colar-retorno', { url });
+    location.href = '/?conectado=1';
+  } catch (e) { alertar(textoErro(e)); }
 };
 $('#btnDesconectar').onclick = async () => { await api('/api/desconectar', {}); location.reload(); };
 

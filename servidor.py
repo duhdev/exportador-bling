@@ -134,6 +134,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             registrar_conexao('foi_ao_bling', url.split('&state=')[0])
             return self.redirecionar(url)
 
+        if rota == '/api/colar-retorno':
+            # o Bling mandou para outro site (ex.: google.com/?code=...&state=...): a pessoa cola o endereço aqui
+            qs = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(d.get('url', '').strip()).query))
+            if 'code' not in qs:
+                return self.responder(400, {'erro': 'Esse endereço não tem o código do Bling (procure por "code=" no endereço).'})
+            registrar_conexao('bling_voltou', 'endereço colado')
+            try:
+                real.trocar_codigo(qs['code'], qs.get('state'))
+            except ErroBling as e:
+                msg = ' '.join(x['mensagem'] for x in validador.traduzir_erro_bling(e.corpo))
+                registrar_conexao('erro_token', msg)
+                return self.responder(400, {'erro': 'Não consegui conectar: ' + msg +
+                                            ' O código vale poucos minutos: clique em "Salvar e conectar ao Bling" e cole o endereço novo logo em seguida.'})
+            registrar_conexao('conectado')
+            gravar('config.json', {**c, 'demo': False})
+            return self.responder(200, {'ok': True})
+
         if rota == '/auth/callback':
             registrar_conexao('bling_voltou', 'com código' if 'code' in q else json.dumps(q, ensure_ascii=False))
             if 'code' not in q:
