@@ -1,0 +1,185 @@
+# Exportador Bling: servidor local. Uso: python servidor.py  -> abre http://localhost:8766
+# Guarda a conexão com o Bling na pasta "dados" do seu computador; nada vai para outro lugar.
+import functools, http.server, json, os, socketserver, sys, traceback, urllib.parse, webbrowser
+
+import validador
+from bling import Bling, BlingDemo, ErroBling, gravar, ler
+
+PORT = 8766
+ROOT = os.path.dirname(os.path.abspath(__file__))
+CALLBACK = f'http://localhost:{PORT}/auth/callback'
+
+real, demo = Bling(), BlingDemo()
+
+
+def cliente():
+    return demo if (ler('config.json') or {}).get('demo') else real
+
+
+def mk_do_canal(tipo, regras):
+    t = (tipo or '').lower().replace(' ', '')
+    for chave, r in regras.items():
+        if any(t == x.lower().replace(' ', '') for x in r['tipos_bling']):
+            return chave
+    return 'generico'
+
+
+def opcoes():
+    c = ler('config.json') or {}
+    return {'marca_padrao': c.get('marca_padrao', '')}
+
+
+def verificar(b, pid, mk):
+    regras = validador.carregar_regras()
+    p = b.produto(pid)
+    corrigido, correcoes, problemas = validador.verificar(p, mk, regras, opcoes())
+    return p, corrigido, correcoes, problemas
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+
+    def responder(self, status, obj):
+        b = json.dumps(obj, ensure_ascii=False).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
+    def redirecionar(self, url):
+        self.send_response(302)
+        self.send_header('Location', url)
+        self.end_headers()
+
+    def corpo(self):
+        n = int(self.headers.get('Content-Length') or 0)
+        return json.loads(self.rfile.read(n) or b'{}')
+
+    def do_GET(self):
+        u = urllib.parse.urlparse(self.path)
+        q = dict(urllib.parse.parse_qsl(u.query))
+        if not (u.path.startswith('/api/') or u.path.startswith('/auth/')):
+            return super().do_GET()
+        self.tratar(u.path, q, None)
+
+    def do_POST(self):
+        u = urllib.parse.urlparse(self.path)
+        self.tratar(u.path, {}, self.corpo())
+
+    def tratar(self, rota, q, dados):
+        # só aceita chamadas desta própria tela (protege a sua conta do Bling contra outros sites)
+        origem = self.headers.get('Origin')
+        if dados is not None and origem and origem not in (f'http://localhost:{PORT}', f'http://127.0.0.1:{PORT}'):
+            return self.responder(403, {'erro': 'Origem não permitida'})
+        try:
+            self.rotear(rota, q, dados)
+        except ErroBling as e:
+            self.responder(502 if e.status != 401 else 401,
+                           {'erro': 'bling', 'status': e.status, 'detalhes': validador.traduzir_erro_bling(e.corpo)})
+        except Exception as e:
+            traceback.print_exc()
+            self.responder(500, {'erro': str(e)})
+
+    def rotear(self, rota, q, d):
+        regras = validador.carregar_regras()
+        c = ler('config.json') or {}
+        b = cliente()
+
+        if rota == '/api/estado':
+            return self.responder(200, {
+                'configurado': bool(c.get('client_id') and c.get('client_secret')), 'demo': bool(c.get('demo')),
+                'conectado': b.conectado(), 'callback': CALLBACK, 'marca_padrao': c.get('marca_padrao', ''),
+                'client_id': c.get('client_id', ''),
+                'marketplaces': {k: {'nome': r['nome'], 'titulo_max': r['titulo_max']} for k, r in regras.items()}})
+
+        if rota == '/api/config':
+            novo = {**c, **{k: v for k, v in d.items() if k in ('client_id', 'client_secret', 'marca_padrao', 'demo')}}
+            gravar('config.json', novo)
+            return self.responder(200, {'ok': True})
+
+        if rota == '/auth/login':
+            if not (c.get('client_id') and c.get('client_secret')):
+                return self.redirecionar('/?erro=configure')
+            return self.redirecionar(real.url_login())
+
+        if rota == '/auth/callback':
+            if 'code' not in q:
+                return self.redirecionar('/?erro=' + urllib.parse.quote(q.get('error_description', 'recusado')))
+            real.trocar_codigo(q['code'], q.get('state'))
+            gravar('config.json', {**c, 'demo': False})
+            return self.redirecionar('/?conectado=1')
+
+        if rota == '/api/desconectar':
+            real.desconectar()
+            return self.responder(200, {'ok': True})
+
+        if rota == '/api/canais':
+            canais = [{'id': x['id'], 'nome': x.get('descricao'), 'tipo': x.get('tipo'),
+                       'marketplace': mk_do_canal(x.get('tipo'), regras), 'ativo': x.get('situacao', 1) == 1}
+                      for x in b.canais()]
+            return self.responder(200, {'canais': canais})
+
+        if rota == '/api/produtos':
+            lista = b.produtos(int(q.get('pagina', 1)), q.get('pesquisa', ''))
+            return self.responder(200, {'produtos': lista})
+
+        if rota == '/api/verificar':
+            _, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
+            return self.responder(200, {'id': d['id'], 'nome': corrigido.get('nome'), 'correcoes': correcoes,
+                                        'problemas': problemas, 'status': validador.status(problemas)})
+
+        if rota == '/api/corrigir-campo':
+            # o usuário digitou o valor na tela: salva no Bling e verifica de novo
+            p = b.produto(d['id'])
+            p = validador.aplicar_campo(p, d['campo'], d['valor'])
+            b.salvar_produto(p)
+            _, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
+            return self.responder(200, {'id': d['id'], 'nome': corrigido.get('nome'), 'correcoes': correcoes,
+                                        'problemas': problemas, 'status': validador.status(problemas)})
+
+        if rota == '/api/exportar':
+            original, corrigido, correcoes, problemas = verificar(b, d['id'], d['marketplace'])
+            erros = [x for x in problemas if x['nivel'] == 'erro']
+            if erros:
+                return self.responder(200, {'id': d['id'], 'nome': corrigido.get('nome'), 'resultado': 'bloqueado', 'problemas': problemas,
+                                            'correcoes': correcoes,
+                                            'mensagem': 'Não enviei: corrija os itens em vermelho primeiro.'})
+            salvo = False
+            if correcoes and d.get('aplicar_correcoes', True):
+                b.salvar_produto(corrigido)
+                salvo = True
+            base = corrigido if salvo else original
+            ajuste = float(d.get('ajuste_preco') or 0)
+            preco = round(float(base.get('preco') or 0) * (1 + ajuste / 100), 2)
+            try:
+                _, acao = b.vincular(base, int(d['loja_id']), preco)
+            except ErroBling as e:
+                return self.responder(200, {'id': d['id'], 'nome': corrigido.get('nome'), 'resultado': 'recusado', 'correcoes': correcoes,
+                                            'problemas': problemas, 'detalhes': validador.traduzir_erro_bling(e.corpo),
+                                            'mensagem': 'O Bling recusou o envio.'})
+            return self.responder(200, {'id': d['id'], 'nome': base.get('nome'), 'resultado': 'enviado', 'acao': acao, 'preco': preco,
+                                        'correcoes': correcoes if salvo else [], 'problemas': problemas,
+                                        'mensagem': ('Anúncio vinculado à loja' if acao == 'criado' else 'Anúncio atualizado na loja')
+                                        + f' por R$ {preco:.2f}.'})
+
+        self.responder(404, {'erro': 'rota não encontrada'})
+
+
+if __name__ == '__main__':
+    os.chdir(os.path.join(ROOT, 'web'))
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    with socketserver.ThreadingTCPServer(('127.0.0.1', PORT), Handler) as srv:
+        url = f'http://localhost:{PORT}'
+        print(f'Exportador Bling rodando em {url}  (feche esta janela para parar)')
+        if '--sem-navegador' not in sys.argv:
+            webbrowser.open(url)
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            pass

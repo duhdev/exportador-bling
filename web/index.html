@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exportador Bling</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Exportador Bling</h1>
+  <span id="conexao" class="pill">…</span>
+  <button id="btnConfig" class="sec">Configurações</button>
+</header>
+
+<main>
+  <!-- Primeira vez: conectar -->
+  <section id="telaConfig" class="card" hidden>
+    <h2>Conectar ao Bling</h2>
+    <ol class="passos">
+      <li>No Bling, abra <b>Preferências › Sistema › Central de extensões › Área do integrador</b> e clique em <b>Criar aplicativo</b> (tipo <i>Aplicativo privado</i>).</li>
+      <li>Em <b>Link de redirecionamento</b>, cole: <code id="callback"></code> <button class="mini" id="copiarCallback">Copiar</button></li>
+      <li>Em <b>Escopos</b>, marque: <i>Produtos</i>, <i>Produtos - Lojas</i>, <i>Canais de venda</i> e <i>Estoques</i>. Salve.</li>
+      <li>Copie o <b>Client ID</b> e o <b>Client Secret</b> do aplicativo e cole abaixo.</li>
+    </ol>
+    <label>Client ID <input id="clientId" autocomplete="off"></label>
+    <label>Client Secret <input id="clientSecret" type="password" autocomplete="off" placeholder="(mantém o salvo se ficar vazio)"></label>
+    <label>Marca padrão <small>usada quando o produto está sem marca (ex.: Genérica, ou o nome da sua loja)</small>
+      <input id="marcaPadrao" placeholder="opcional"></label>
+    <div class="acoes">
+      <button id="btnConectar">Salvar e conectar ao Bling</button>
+      <button id="btnDemo" class="sec">Testar com produtos de exemplo</button>
+      <button id="btnDesconectar" class="sec perigo" hidden>Desconectar</button>
+    </div>
+  </section>
+
+  <!-- Passo 1 -->
+  <section id="telaLojas" class="card" hidden>
+    <h2><span class="num">1</span> Para onde exportar?</h2>
+    <div id="lojas" class="lojas"></div>
+    <label class="linha">Regras usadas:
+      <select id="regra"></select>
+      <small>escolhida pelo tipo da loja; troque se estiver errada</small>
+    </label>
+  </section>
+
+  <!-- Passo 2 -->
+  <section id="telaProdutos" class="card" hidden>
+    <h2><span class="num">2</span> Quais produtos?</h2>
+    <div class="barra">
+      <input id="pesquisa" placeholder="Buscar por nome…">
+      <label class="check"><input type="checkbox" id="todos"> Selecionar todos</label>
+      <span id="contagem" class="muted"></span>
+    </div>
+    <div id="produtos" class="lista"></div>
+    <button id="maisProdutos" class="sec" hidden>Carregar mais</button>
+  </section>
+
+  <!-- Passo 3 -->
+  <section id="telaEnviar" class="card" hidden>
+    <h2><span class="num">3</span> Verificar e exportar</h2>
+    <div class="barra">
+      <label class="check"><input type="checkbox" id="autoCorrigir" checked> Corrigir sozinho o que der (título, descrição, peso…) e salvar no Bling</label>
+      <label class="linha">Ajuste de preço nesta loja <input id="ajuste" type="number" step="0.5" value="0" class="curto"> %</label>
+    </div>
+    <div class="acoes">
+      <button id="btnVerificar" class="sec">Só verificar</button>
+      <button id="btnExportar">Exportar selecionados</button>
+    </div>
+    <div id="progresso" class="progresso" hidden><div></div></div>
+    <div id="resumo" class="resumo"></div>
+    <div id="resultados"></div>
+  </section>
+</main>
+
+<template id="tplResultado">
+  <article class="resultado">
+    <div class="topo"><span class="selo"></span><b class="nome"></b><span class="msg muted"></span></div>
+    <div class="corpo"></div>
+  </article>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
